@@ -29,7 +29,7 @@ pip install -r requirements.txt
 ```
 
 ## Как запустить
-
+Переименовываем `env_template` в `.env`. В данном файле основные настройки. Более подробно смотри раздел [Параметры скриптов](#параметры-скриптов).
 ```bash
 python server.py
 ```
@@ -48,6 +48,23 @@ python server.py
 GET http://host.ru/archive/3bea29ccabbbf64bdebcc055319c5745/
 GET http://host.ru/archive/af1ad8c76fda2e48ea9aed2937e972ea/
 ```
+
+### Параметры скриптов
+Параметры работы скриптов указаны в файле `.env`.
+
+`PHOTOS_FOLDERPATH` -  путь к папке с папками фотографий
+
+`ENABLE_LOGGING` - включение логирование
+
+`SLEEP_SECS` - установить интервал между отправками фрагментов архива
+
+В случае необходимости параметры можно задать через командную строку `python server.py`:
+
+`--photos_folderpath=PHOTOS_FOLDERPATH` - путь к папке с папками фотографий
+
+`--enable_logging`  -  включить логирование
+
+`--sleep_sec=SLEEP_SEC` - установить интервал между отправками фрагментов архива
 
 # Цели проекта
 

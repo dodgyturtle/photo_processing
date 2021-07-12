@@ -14,18 +14,18 @@ def create_input_parser():
         "--photos_folderpath",
         type=str,
         default=None,
-        help="Папка хранения фотографий",
+        help="путь к папке с папками фотографий",
     )
     parser.add_argument(
         "--enable_logging",
         action="store_true",
-        help="Включить логирование",
+        help="включить логирование",
     )
     parser.add_argument(
         "--sleep_sec",
         type=int,
         default=None,
-        help="Время задержки между посылками пакетов",
+        help="установить интервал между отправками фрагментов архива",
     )
     return parser
 
