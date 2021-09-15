@@ -30,40 +30,28 @@ def create_input_parser():
     return parser
 
 
-async def kill_all_proccesses(pid):
-    procces = await asyncio.create_subprocess_shell(
-        f"pgrep -P { pid }",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await procces.communicate()
-    subprocces_pid = stdout.decode()
-    if subprocces_pid:
-        await asyncio.create_subprocess_shell(f"kill -9 { subprocces_pid }", stdout=None, stderr=None)
-        return
-    await asyncio.create_subprocess_shell(f"kill -9 { pid }", stdout=None, stderr=None)
-
-
 async def archivate(request):
 
-    archive_hash = request.match_info.get("archive_hash")
+    archive_hash = request.match_info["archive_hash"]
 
-    if PHOTOS_FOLDERPATH in [".", ".."]:
+    if request.app["photo_folderpath"] in [".", ".."]:
         raise web.HTTPNotFound(text="Неверно указана директория с файлами на сервере")
 
-    if not path.exists(f"./{ PHOTOS_FOLDERPATH }/{ archive_hash }"):
+    if not path.exists(f"./{ request.app['photo_folderpath'] }/{ archive_hash }"):
         raise web.HTTPNotFound(text="Архив не существует или был удален")
 
     response = web.StreamResponse()
     response.headers["Content-Type"] = "text/html"
-    response.headers["Content-Disposition"] = "inline"
-    response.headers["Content-Disposition"] = "attachment"
-    response.headers["Content-Disposition"] = f"attachment; filename={ archive_hash }.zip"
+    response.headers[
+        "Content-Disposition"
+    ] = f"attachment; filename={ archive_hash }.zip"
     await response.prepare(request)
-
-    proccess = await asyncio.create_subprocess_shell(
-        f"zip -r - { archive_hash }",
-        cwd=rf"./{ PHOTOS_FOLDERPATH }",
+    zip_folderpath = f"{ request.app['photo_folderpath'] }/{ archive_hash }"
+    proccess = await asyncio.create_subprocess_exec(
+        "zip",
+        "-r",
+        "-",
+        f"./{ zip_folderpath }",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -72,19 +60,18 @@ async def archivate(request):
             if proccess.stdout.at_eof():
                 break
             file_data = await proccess.stdout.read(n=512000)
-            logging.warning("Sending archive chunk ...")
-
             await response.write(file_data)
-            await asyncio.sleep(SLEEP_SECS)
+            logging.warning("Sending archive chunk ...")
+            await asyncio.sleep(request.app["sleep_sec"])
 
-    except asyncio.CancelledError:
+    except asyncio.exceptions.CancelledError:
         logging.warning("Stopping zip ...")
-        await kill_all_proccesses(proccess.pid)
-        raise
+        proccess.kill()
 
     finally:
         logging.warning("Killing zip ...")
-        await kill_all_proccesses(proccess.pid)
+        proccess.kill()
+        await proccess.communicate()
         logging.warning("Download was interrupted")
 
     return response
@@ -99,12 +86,11 @@ async def handle_index_page(request):
 def main():
     env = Env()
     env.read_env()
+    logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
+    app = web.Application()
 
-    global SLEEP_SECS
-    global PHOTOS_FOLDERPATH
-
-    SLEEP_SECS = env.int("SLEEP_SECS")
-    PHOTOS_FOLDERPATH = env("PHOTOS_FOLDERPATH")
+    app["sleep_sec"] = env.int("SLEEP_SECS")
+    app["photo_folderpath"] = env("PHOTOS_FOLDERPATH")
 
     env_enable_logging = env.bool("ENABLE_LOGGING")
     input_parser = create_input_parser()
@@ -114,20 +100,19 @@ def main():
         logging.disable(logging.WARNING)
 
     if args.photos_folderpath:
-        PHOTOS_FOLDERPATH = args.photos_folderpath
+        app["photo_folderpath"] = args.photos_folderpath
 
     if args.sleep_sec:
-        SLEEP_SECS = args.sleep_sec
+        app["sleep_sec"] = args.sleep_sec
 
-    app = web.Application()
     app.add_routes(
         [
             web.get("/", handle_index_page),
             web.get("/archive/{archive_hash}/", archivate),
         ]
     )
-    logging.warning("Start server")
-    web.run_app(app, port="80")
+    logging.info("Start server")
+    web.run_app(app, port="8080")
 
 
 if __name__ == "__main__":
